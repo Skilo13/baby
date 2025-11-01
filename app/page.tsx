@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BettingState, Bet } from './types';
 import { getUserBalance, updateUserBalance, getUserName, getStorageKey } from './lib/betting';
 import { Baby, Heart, Trophy, Coins } from 'lucide-react';
+import NameInput from './components/NameInput';
 
 export default function Home() {
   const [state, setState] = useState<BettingState | null>(null);
@@ -14,8 +15,6 @@ export default function Home() {
   const [selectedGender, setSelectedGender] = useState<'boy' | 'girl' | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string>('');
-  const nameInputRef = useRef<HTMLInputElement>(null);
-  const isTypingRef = useRef(false);
   const userNameInitialized = useRef(false);
 
   // Define fetchState before useEffect so it can be called
@@ -140,8 +139,8 @@ export default function Home() {
     }
     setUserId(id);
 
-    // Load user name (only once, and only if not already typing)
-    if (!userNameInitialized.current && !isTypingRef.current) {
+    // Load user name (only once)
+    if (!userNameInitialized.current) {
       const stored = localStorage.getItem(getStorageKey(id));
       if (stored) {
         try {
@@ -186,16 +185,14 @@ export default function Home() {
     };
   }, []);
 
-  const handleNameSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const nameToSave = nameInputRef.current?.value.trim() || userName.trim();
-    if (nameToSave) {
-      setUserName(nameToSave);
-      updateUserBalance(userId, userBalance, nameToSave);
-      setMessage('Name saved!');
-      setTimeout(() => setMessage(''), 2000);
+  const handleNameSave = useCallback((name: string) => {
+    setUserName(name);
+    if (userId) {
+      updateUserBalance(userId, userBalance, name);
     }
-  };
+    setMessage('Name saved!');
+    setTimeout(() => setMessage(''), 2000);
+  }, [userId, userBalance]);
 
   const placeBet = async () => {
     if (!selectedGender || !userName.trim()) {
@@ -320,47 +317,12 @@ export default function Home() {
         {/* User Info */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           {!userName.trim() ? (
-            <form 
-              onSubmit={(e) => {
-                e.preventDefault();
-                const input = nameInputRef.current;
-                if (input && input.value.trim()) {
-                  setUserName(input.value.trim());
-                  handleNameSubmit(e);
-                }
-              }} 
-              className="space-y-4"
-            >
-              <label className="block text-lg font-semibold text-gray-700 mb-2">
-                Enter Your Name
-              </label>
-              <div className="flex gap-2">
-                <input
-                  ref={nameInputRef}
-                  type="text"
-                  defaultValue={userName}
-                  onChange={(e) => {
-                    // Update state but don't let it control the input on mobile
-                    const value = e.target.value;
-                    setUserName(value);
-                  }}
-                  placeholder="Your name..."
-                  className="flex-1 px-4 py-2 border-2 border-babyPink rounded-lg focus:outline-none focus:ring-2 focus:ring-babyPink text-lg"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                  autoFocus
-                  required
-                />
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-babyPink text-white rounded-lg font-semibold hover:bg-pink-300 transition"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
+            <div key="name-input-wrapper">
+              <NameInput
+                onSave={handleNameSave}
+                initialName=""
+              />
+            </div>
           ) : (
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
