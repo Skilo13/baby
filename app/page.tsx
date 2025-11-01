@@ -15,31 +15,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string>('');
 
-  useEffect(() => {
-    // Initialize or load user ID
-    let id = localStorage.getItem('user_id');
-    if (!id) {
-      id = `user_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-      localStorage.setItem('user_id', id);
-    }
-    setUserId(id);
-
-    // Load user name
-    const stored = localStorage.getItem(getStorageKey(id));
-    if (stored) {
-      const user = JSON.parse(stored);
-      setUserName(user.name || '');
-      setUserBalance(user.balance || 1000);
-    } else {
-      setUserBalance(1000);
-    }
-
-    // Load betting state
-    fetchState();
-    const interval = setInterval(fetchState, 2000); // Refresh every 2 seconds
-    return () => clearInterval(interval);
-  }, []);
-
+  // Define fetchState before useEffect so it can be called
   const fetchState = async () => {
     try {
       // Try to load from localStorage first (backup)
@@ -53,13 +29,26 @@ export default function Home() {
         }
       }
 
-      // Fetch from API
-      const response = await fetch('/api/bets');
+      // Fetch from API with cache-busting to ensure fresh data on mobile
+      const timestamp = Date.now();
+      const response = await fetch(`/api/bets?t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+      });
       const data = await response.json();
       
       // The /api/bets endpoint should return the full state including reveal status
       // But we'll also check /api/reveal as a fallback to ensure we have the latest
-      const revealResponse = await fetch('/api/reveal');
+      const revealResponse = await fetch(`/api/reveal?t=${timestamp}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+      });
       const revealData = await revealResponse.json();
       
       // Merge the reveal data with the bets data to ensure we have the latest state
@@ -138,6 +127,48 @@ export default function Home() {
       }
     }
   };
+
+  useEffect(() => {
+    // Initialize or load user ID
+    let id = localStorage.getItem('user_id');
+    if (!id) {
+      id = `user_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+      localStorage.setItem('user_id', id);
+    }
+    setUserId(id);
+
+    // Load user name
+    const stored = localStorage.getItem(getStorageKey(id));
+    if (stored) {
+      const user = JSON.parse(stored);
+      setUserName(user.name || '');
+      setUserBalance(user.balance || 1000);
+    } else {
+      setUserBalance(1000);
+    }
+
+    // Load betting state
+    fetchState();
+    // Poll every 2 seconds when page is visible, use visibility API to pause when tab is hidden
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchState();
+      }
+    }, 2000);
+    
+    // Also refresh when page becomes visible (mobile browsers often pause when switching tabs)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchState();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const handleNameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -282,6 +313,8 @@ export default function Home() {
                   onChange={(e) => setUserName(e.target.value)}
                   placeholder="Your name..."
                   className="flex-1 px-4 py-2 border-2 border-babyPink rounded-lg focus:outline-none focus:ring-2 focus:ring-babyPink text-lg"
+                  autoComplete="name"
+                  autoFocus
                   required
                 />
                 <button
