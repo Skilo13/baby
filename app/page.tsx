@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { BettingState, Bet } from './types';
 import { getUserBalance, updateUserBalance, getUserName, getStorageKey } from './lib/betting';
-import { Baby, Heart, Trophy, Coins } from 'lucide-react';
+import { Baby, Heart, Trophy, Coins, RefreshCw } from 'lucide-react';
 import NameInput from './components/NameInput';
 
 export default function Home() {
@@ -162,26 +162,72 @@ export default function Home() {
       userNameInitialized.current = true;
     }
 
-    // Load betting state
+    // Load betting state immediately
     fetchState();
-    // Poll every 2 seconds when page is visible, use visibility API to pause when tab is hidden
-    const interval = setInterval(() => {
-      if (!document.hidden) {
-        fetchState();
-      }
-    }, 2000);
     
-    // Also refresh when page becomes visible (mobile browsers often pause when switching tabs)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchState();
+    // Poll every 1.5 seconds when page is visible (more frequent for better mobile experience)
+    let interval: NodeJS.Timeout;
+    const startPolling = () => {
+      if (interval) clearInterval(interval);
+      interval = setInterval(() => {
+        if (!document.hidden) {
+          fetchState();
+        }
+      }, 1500); // Poll every 1.5 seconds
+    };
+    
+    // Stop polling when page is hidden
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null as any;
       }
     };
+    
+    startPolling();
+    
+    // Refresh when page becomes visible (mobile browsers often pause when switching tabs)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchState(); // Immediate refresh when becoming visible
+        startPolling();
+      }
+    };
+    
+    // Refresh when window gains focus (works better on mobile)
+    const handleFocus = () => {
+      fetchState();
+      startPolling();
+    };
+    
+    // Refresh when page is shown (handles mobile back/forward navigation)
+    const handlePageShow = (e: PageTransitionEvent) => {
+      // Refresh even if page was loaded from cache
+      if (e.persisted) {
+        fetchState();
+      }
+      startPolling();
+    };
+    
+    // Refresh when app comes to foreground (mobile-specific)
+    const handleAppForeground = () => {
+      fetchState();
+      startPolling();
+    };
+    
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('focusin', handleFocus); // Some mobile browsers prefer this
+    window.addEventListener('pageshow', handlePageShow); // Handles back/forward navigation
     
     return () => {
-      clearInterval(interval);
+      stopPolling();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('focusin', handleFocus);
     };
   }, []);
 
@@ -302,12 +348,21 @@ export default function Home() {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-4 mb-4">
+          <div className="flex items-center justify-center gap-4 mb-4 relative">
             <Baby className="w-12 h-12 text-babyPink baby-bounce" />
             <h1 className="text-4xl md:text-5xl font-bold text-gray-800">
               Baby Gender Bets
             </h1>
             <Baby className="w-12 h-12 text-babyBlue baby-bounce" />
+            {/* Manual Refresh Button */}
+            <button
+              onClick={() => fetchState()}
+              className="absolute top-0 right-0 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition active:scale-95"
+              title="Refresh"
+              aria-label="Refresh betting state"
+            >
+              <RefreshCw className="w-5 h-5 text-gray-600" />
+            </button>
           </div>
           <p className="text-lg text-gray-600">
             🎀 Place your bets on the baby's gender! 👶
