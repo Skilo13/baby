@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BettingState, Bet } from './types';
 import { getUserBalance, updateUserBalance, getUserName, getStorageKey } from './lib/betting';
 import { Baby, Heart, Trophy, Coins } from 'lucide-react';
@@ -14,6 +14,9 @@ export default function Home() {
   const [selectedGender, setSelectedGender] = useState<'boy' | 'girl' | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string>('');
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const isTypingRef = useRef(false);
+  const userNameInitialized = useRef(false);
 
   // Define fetchState before useEffect so it can be called
   const fetchState = async () => {
@@ -137,14 +140,27 @@ export default function Home() {
     }
     setUserId(id);
 
-    // Load user name
-    const stored = localStorage.getItem(getStorageKey(id));
-    if (stored) {
-      const user = JSON.parse(stored);
-      setUserName(user.name || '');
-      setUserBalance(user.balance || 1000);
-    } else {
-      setUserBalance(1000);
+    // Load user name (only once, and only if not already typing)
+    if (!userNameInitialized.current && !isTypingRef.current) {
+      const stored = localStorage.getItem(getStorageKey(id));
+      if (stored) {
+        try {
+          const user = JSON.parse(stored);
+          if (user.name) {
+            setUserName(user.name);
+          }
+          if (user.balance) {
+            setUserBalance(user.balance);
+          } else {
+            setUserBalance(1000);
+          }
+        } catch (e) {
+          setUserBalance(1000);
+        }
+      } else {
+        setUserBalance(1000);
+      }
+      userNameInitialized.current = true;
     }
 
     // Load betting state
@@ -172,8 +188,10 @@ export default function Home() {
 
   const handleNameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (userName.trim()) {
-      updateUserBalance(userId, userBalance, userName.trim());
+    const nameToSave = nameInputRef.current?.value.trim() || userName.trim();
+    if (nameToSave) {
+      setUserName(nameToSave);
+      updateUserBalance(userId, userBalance, nameToSave);
       setMessage('Name saved!');
       setTimeout(() => setMessage(''), 2000);
     }
@@ -302,18 +320,36 @@ export default function Home() {
         {/* User Info */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           {!userName.trim() ? (
-            <form onSubmit={handleNameSubmit} className="space-y-4">
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                const input = nameInputRef.current;
+                if (input && input.value.trim()) {
+                  setUserName(input.value.trim());
+                  handleNameSubmit(e);
+                }
+              }} 
+              className="space-y-4"
+            >
               <label className="block text-lg font-semibold text-gray-700 mb-2">
                 Enter Your Name
               </label>
               <div className="flex gap-2">
                 <input
+                  ref={nameInputRef}
                   type="text"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
+                  defaultValue={userName}
+                  onChange={(e) => {
+                    // Update state but don't let it control the input on mobile
+                    const value = e.target.value;
+                    setUserName(value);
+                  }}
                   placeholder="Your name..."
                   className="flex-1 px-4 py-2 border-2 border-babyPink rounded-lg focus:outline-none focus:ring-2 focus:ring-babyPink text-lg"
-                  autoComplete="name"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
                   autoFocus
                   required
                 />
