@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Baby, Lock, Unlock, Heart } from 'lucide-react';
+import { Baby, Lock, Unlock, Heart, RotateCcw } from 'lucide-react';
 
 export default function AdminPage() {
   const [revealed, setRevealed] = useState(false);
   const [revealedGender, setRevealedGender] = useState<'boy' | 'girl' | null>(null);
   const [selectedGender, setSelectedGender] = useState<'boy' | 'girl' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [message, setMessage] = useState<string>('');
 
   useEffect(() => {
@@ -78,6 +79,48 @@ export default function AdminPage() {
       setTimeout(() => setMessage(''), 3000);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetState = async () => {
+    const confirmReset = confirm(
+      'Are you sure you want to reset all bets and return to initial state?\n\nThis will:\n- Clear all bets\n- Reset gender reveal\n- Keep user balances (they still have their money)\n\nThis action cannot be undone!'
+    );
+
+    if (!confirmReset) return;
+
+    setResetLoading(true);
+    try {
+      const response = await fetch('/api/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Clear localStorage backup
+        localStorage.removeItem('betting_state_backup');
+        
+        setRevealed(false);
+        setRevealedGender(null);
+        setSelectedGender(null);
+        setMessage('State reset successfully! All bets have been cleared. 🗑️');
+        setTimeout(() => setMessage(''), 5000);
+        
+        // Refresh the page after a short delay to ensure state is updated
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        setMessage(data.error || 'Failed to reset state');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (error) {
+      setMessage('Failed to reset state. Please try again.');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -187,7 +230,7 @@ export default function AdminPage() {
         )}
 
         {/* Info Box */}
-        <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
             <Baby className="w-6 h-6 text-babyPink" />
             Instructions
@@ -198,6 +241,28 @@ export default function AdminPage() {
             <li>• Once revealed, all bettors will see the result</li>
             <li>• Make sure you're ready before clicking reveal!</li>
           </ul>
+        </div>
+
+        {/* Reset Button */}
+        <div className="bg-red-50 border-2 border-red-200 rounded-2xl shadow-lg p-6">
+          <h3 className="text-xl font-bold text-red-800 mb-3 flex items-center gap-2">
+            <RotateCcw className="w-6 h-6 text-red-600" />
+            Reset All Data
+          </h3>
+          <p className="text-gray-700 mb-4">
+            Clear all bets and reset to initial state. This will remove all betting history and reset the gender reveal status.
+          </p>
+          <button
+            onClick={resetState}
+            disabled={resetLoading}
+            className="w-full px-6 py-3 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg flex items-center justify-center gap-2"
+          >
+            <RotateCcw className="w-5 h-5" />
+            {resetLoading ? 'Resetting...' : 'Reset All Bets & State'}
+          </button>
+          <p className="text-sm text-red-600 mt-3 text-center">
+            ⚠️ Warning: This action cannot be undone!
+          </p>
         </div>
 
         {/* Footer */}
